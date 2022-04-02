@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import os
 import os.path
 import math
@@ -156,17 +158,9 @@ def set_pixel_and_check_ratelimit(
     # If we don't get data, it means we've been rate limited.
     # If we do, a pixel has been successfully placed.
     if response.json()["data"] == None:
-        waitTime = math.floor(
-            response.json()["errors"][0]["extensions"]["nextAvailablePixelTs"]
-        )
-        print("placing failed: rate limited")
+        waitTime = math.floor(response.json()["errors"][0]["extensions"]["nextAvailablePixelTs"])
     else:
-        waitTime = math.floor(
-            response.json()["data"]["act"]["data"][0]["data"][
-                "nextAvailablePixelTimestamp"
-            ]
-        )
-        print("placing succeeded")
+        waitTime = math.floor(response.json()["data"]["act"]["data"][0]["data"]["nextAvailablePixelTimestamp"])
 
     # THIS COMMENTED CODE LETS YOU DEBUG THREADS FOR TESTING
     # Works perfect with one thread.
@@ -182,10 +176,7 @@ def set_pixel_and_check_ratelimit(
 
 
 def get_board(access_token_in):
-    print("Getting board")
-    ws = create_connection(
-        "wss://gql-realtime-2.reddit.com/query", origin="https://hot-potato.reddit.com"
-    )
+    ws = create_connection( "wss://gql-realtime-2.reddit.com/query", origin="https://hot-potato.reddit.com")
     ws.send(
         json.dumps(
             {
@@ -252,7 +243,6 @@ def get_board(access_token_in):
     ws.close()
 
     boardimg = BytesIO(requests.get(file, stream=True).content)
-    print("Got image:", file)
 
     return boardimg
 
@@ -301,8 +291,6 @@ def get_unset_pixel(boardimg, x, y):
                         new_rgb,
                     )
                 break
-            else:
-                print("TransparrentPixel")
     return x, y, new_rgb
 
 
@@ -327,9 +315,6 @@ def load_image():
     image_path = os.path.join(os.path.abspath(os.getcwd()), "image.jpg")
     im = Image.open(image_path)
     pix = im.load()
-    print(
-        "image size: ", im.size
-    )  # Get the width and height of the image for iterating over
     image_width, image_height = im.size
 
 
@@ -394,25 +379,22 @@ def task(credentials_index):
             )
             if update_str != new_update_str and time_until_next_draw % 10 == 0:
                 update_str = new_update_str
-                print(
-                    "-------Thread #"
-                    + str(credentials_index)
-                    + "-------\n"
-                    + update_str
-                )
+                if verbose_mode:
+                    print(
+                        "-------Thread #"
+                        + str(credentials_index)
+                        + "-------\n"
+                        + update_str
+                    )
 
             # refresh access token if necessary
-            if (
-                access_tokens[credentials_index] is None
-                or current_timestamp
-                >= access_token_expires_at_timestamp[credentials_index]
-            ):
-                print(
-                    "-------Thread #"
-                    + str(credentials_index)
-                    + "-------\n"
-                    + "Refreshing access token..."
-                )
+            if ( access_tokens[credentials_index] is None or current_timestamp >= access_token_expires_at_timestamp[credentials_index]):
+                if verbose_mode:
+                    print(
+                        "-------Thread #"
+                        + str(credentials_index)
+                        + "-------\n"
+                        + "Refreshing access token...")
 
                 # developer's reddit username and password
                 try:
@@ -458,7 +440,12 @@ def task(credentials_index):
                     print("received response: ", r.text)
 
                 response_data = r.json()
-                access_tokens[credentials_index] = response_data["access_token"]
+                try:
+                    access_tokens[credentials_index] = response_data["access_token"]
+                except KeyError:
+                    print(f"bad account: {username}\n")
+                    repeat_forever = False
+                    break
                 # access_token_type = response_data["token_type"]  # this is just "bearer"
                 access_token_expires_in_seconds = response_data[
                     "expires_in"
@@ -470,10 +457,10 @@ def task(credentials_index):
                     credentials_index
                 ] = current_timestamp + int(access_token_expires_in_seconds)
 
-                print(
-                    "received new access token: ",
-                    access_tokens[credentials_index],
-                )
+                if verbose_mode:
+                    print(
+                        "received new access token: ",
+                        access_tokens[credentials_index])
 
             # draw pixel onto screen
             if access_tokens[credentials_index] is not None and (
